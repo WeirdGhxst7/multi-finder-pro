@@ -1,0 +1,198 @@
+import re
+from bs4 import BeautifulSoup
+import requests
+
+# Global variable to keep track of current position for each search term
+currentPosition = {}
+
+
+def highlightWord(word, color):
+		wordRegex = re.compile(r'\b(' + word + r')\b', re.IGNORECASE)
+
+		totalCount = 0
+
+		# Reset the current position for this word
+		currentPosition[word] = 0
+
+		def highlightTextNode(node):
+				if node.name is None:
+						matches = re.findall(wordRegex, node.string)
+						if matches:
+								totalCount += len(matches)
+
+						replacementNode = BeautifulSoup('', 'html.parser')
+						for part in re.split(wordRegex, node.string):
+								if re.match(wordRegex, part):
+										highlight = BeautifulSoup(
+												f'<multiwordfinder-highlight class="multiwordfinder-highlight" style="background-color: {color}; color: {getContrastColor(color)};" data-word="{word}">{part}</multiwordfinder-highlight>',
+												'html.parser')
+										replacementNode.append(highlight)
+								else:
+										replacementNode.append(part)
+
+						index = 0  # Initialize index for each highlighted word
+						for highlight in replacementNode.find_all('multiwordfinder-highlight'):
+								highlight['data-index'] = index  # Set a data attribute to keep track of the index
+								highlight['data-word-id'] = f'word-{word}-{index}'  # Unique identifier for each word instance
+								index += 1
+
+						if replacementNode.contents:
+								node.replace_with(replacementNode)
+				else:
+						for child in node.children:
+								highlightTextNode(child)
+
+		soup = BeautifulSoup(requests.get('http://example.com').text, 'html.parser')
+		highlightTextNode(soup.body)
+
+		# After highlighting, update positions for scrollbar indicator
+		for highlight in soup.find_all('multiwordfinder-highlight'):
+				# Calculate the vertical position of each highlight as a percentage of the total document height
+				positionPercentage = (highlight['style']['top'] + window.scrollY) / soup.body.scrollHeight * 100
+				highlight['data-position'] = positionPercentage  # Store this position in a data attribute
+
+		# Update the custom scrollbar indicator after highlighting and calculating positions
+		updateCustomScrollbarIndicator()
+
+		return totalCount
+
+
+def highlightWordPartial(word, color):
+		wordRegex = re.compile(word, re.IGNORECASE)
+
+		totalCount = 0
+
+		# Reset the current position for this word
+		currentPosition[word] = 0
+
+		def highlightTextNode(node):
+				if node.name is None:
+						matches = re.findall(wordRegex, node.string)
+						if matches:
+								totalCount += len(matches)
+
+						replacementNode = BeautifulSoup('', 'html.parser')
+						for part in re.split(wordRegex, node.string):
+								if re.match(wordRegex, part):
+										highlight = BeautifulSoup(
+												f'<multiwordfinder-highlight class="multiwordfinder-highlight" style="background-color: {color}; color: {getContrastColor(color)};" data-word="{word}">{part}</multiwordfinder-highlight>',
+												'html.parser')
+										replacementNode.append(highlight)
+								else:
+										replacementNode.append(part)
+
+						index = 0  # Initialize index for each highlighted word
+						for highlight in replacementNode.find_all('multiwordfinder-highlight'):
+								highlight['data-index'] = index  # Set a data attribute to keep track of the index
+								highlight['data-word-id'] = f'word-{word}-{index}'  # Unique identifier for each word instance
+								index += 1
+
+						if replacementNode.contents:
+								node.replace_with(replacementNode)
+				else:
+						for child in node.children:
+								highlightTextNode(child)
+
+		soup = BeautifulSoup(requests.get('http://example.com').text, 'html.parser')
+		highlightTextNode(soup.body)
+
+		# After highlighting, update positions for scrollbar indicator
+		for highlight in soup.find_all('multiwordfinder-highlight'):
+				# Calculate the vertical position of each highlight as a percentage of the total document height
+				positionPercentage = (highlight['style']['top'] + window.scrollY) / soup.body.scrollHeight * 100
+				highlight['data-position'] = positionPercentage  # Store this position in a data attribute
+
+		# Update the custom scrollbar indicator after highlighting and calculating positions
+		updateCustomScrollbarIndicator()
+
+		return totalCount
+
+
+def clearHighlights():
+		highlightedElements = soup.find_all('multiwordfinder-highlight')
+		for element in highlightedElements:
+				parent = element.parent
+				if parent:
+						textNode = BeautifulSoup(element.string, 'html.parser')
+						parent.replace_with(textNode)
+						parent.normalize()  # Merge adjacent text nodes
+		print(f'Cleared {len(highlightedElements)} highlights.')
+
+
+def navigateToOccurrence(word, direction=0):
+		highlights = soup.find_all('multiwordfinder-highlight', {'data-word': word})
+		if len(highlights) == 0:
+				return
+
+		# Remove the selected-word class from all highlights
+		for highlight in highlights:
+				highlight['class'].remove('selected-word')
+
+		currentPosition[word] = (currentPosition[word] + len(highlights) + direction) % len(highlights)
+
+		targetElement = highlights[currentPosition[word]]
+		targetElement.scrollIntoView(behavior='smooth', block='center')  # Scroll to the target element
+
+		# Add the selected-word class to the target element
+		targetElement['class'].append('selected-word')
+
+		# Remove the current-word class from all highlights
+		for highlight in highlights:
+				highlight['class'].remove('current-word')
+
+		# Add the current-word class to the target element
+		targetElement['class'].append('current-word')
+
+		# Send a message to the popup script to update the position counter
+		chrome.runtime.sendMessage({
+				'action': 'updateCurrentPosition',
+				'word': word,
+				'currentPosition': currentPosition[word],
+				'totalCount': len(highlights)
+		})
+
+
+def selectText(element):
+		selection = window.getSelection()
+		range = document.createRange()
+		range.selectNodeContents(element)
+		selection.removeAllRanges()
+		selection.addRange(range)
+
+
+def updateCustomScrollbarIndicator():
+		scrollbarIndicator = soup.find('div', {'id': 'custom-scrollbar-indicator'})
+		if not scrollbarIndicator:
+				scrollbarIndicator = BeautifulSoup('', 'html.parser')
+				scrollbarIndicator['id'] = 'custom-scrollbar-indicator'
+				soup.body.append(scrollbarIndicator)
+
+		# Basic styling for the scrollbar indicator (this should ideally be moved to content.css)
+		scrollbarIndicator['style'] = 'position: fixed; top: 0; right: 0; width: 20px; height: 100%; z-index: 9999;'
+
+		# Clear existing markers
+		scrollbarIndicator.clear()
+
+		for highlight in soup.find_all('multiwordfinder-highlight'):
+				marker = BeautifulSoup('', 'html.parser')
+				position = highlight['data-position']  # Retrieve the stored position
+				color = highlight['style']['background-color']  # Use the highlight's background color for the marker
+
+				marker['style'] = f'position: absolute; width: 100%; height: 2px; left: 0; top: {position}%; background-color: {color};'
+
+				scrollbarIndicator.append(marker)
+
+
+def getContrastColor(color):
+		rgb = int(color[1:], 16)  # Convert hexadecimal color to RGB integer
+		r = (rgb >> 16) & 0xff  # Extract red component
+		g = (rgb >> 8) & 0xff  # Extract green component
+		b = (rgb >> 0) & 0xff  # Extract blue component
+		luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b  # Calculate luminance
+		return '#000000' if luminance > 128 else '#ffffff'  # Return black or white based on luminance
+
+
+# Add a message listener for updating the scrollbar indicator
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) ==) 
+		if request['action'] == 'updateScrollbarIndicator':
+				updateCustomScrollbarIndicator()
